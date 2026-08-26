@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Expense Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDE7D8;
+    --paper-raised:#F5F0E4;
+    --ink:#232E3B;
+    --ink-soft:#5C6673;
+    --line:#C9BEA3;
+    --brass:#A6791F;
+    --rust:#AE4530;
+    --sage:#57755A;
+    --teal:#3E6A68;
+    --plum:#6A4C68;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{
+    max-width:520px;
+    margin:0 auto;
+    padding:22px 18px 60px;
+  }
+
+  /* ---- Header ---- */
+  .header{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .stamp{
+    width:34px;height:34px;border-radius:50%;
+    border:1.5px dashed var(--brass);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Fraunces', serif; font-weight:600; font-size:15px;
+    color:var(--brass);
+    transform:rotate(-6deg);
+    flex-shrink:0;
+  }
+  .brand-text{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:1.05rem;
+    letter-spacing:0.02em;
+  }
+  .month-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    text-align:right;
+    padding-top:8px;
+  }
+
+  /* ---- Budget line ---- */
+  .budget-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-size:0.85rem;
+    color:var(--ink-soft);
+    border-bottom:1px solid var(--line);
+    padding-bottom:10px;
+    margin-bottom:20px;
+  }
+  .budget-row span.label{font-family:'IBM Plex Mono', monospace; letter-spacing:0.03em;}
+  .budget-edit-btn{
+    background:none;border:none;color:var(--brass);
+    font-family:'IBM Plex Mono', monospace; font-size:0.75rem;
+    cursor:pointer; text-decoration:underline; padding:0;
+  }
+  .budget-input-row{display:flex; gap:8px; align-items:center;}
+  .budget-input-row input{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.85rem;
+    border:1px solid var(--line);
+    background:var(--paper-raised);
+    border-radius:4px;
+    padding:4px 8px;
+    width:100px;
+    color:var(--ink);
+  }
+  .budget-input-row button{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:0.78rem;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:4px;
+    padding:5px 12px;
+    cursor:pointer;
+  }
+  .cycle-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-size:0.85rem;
+    color:var(--ink-soft);
+    border-bottom:1px solid var(--line);
+    padding-bottom:10px;
+    margin-bottom:20px;
+  }
+  .cycle-row span.label{font-family:'IBM Plex Mono', monospace; letter-spacing:0.03em;}
+  .cycle-input-row{display:flex; gap:8px; align-items:center;}
+  .cycle-input-row select{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.85rem;
+    border:1px solid var(--line);
+    background:var(--paper-raised);
+    border-radius:4px;
+    padding:4px 8px;
+    color:var(--ink);
+  }
+  .cycle-input-row button{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:0.78rem;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:4px;
+    padding:5px 12px;
+    cursor:pointer;
+  }
+
+  /* ---- Hero remaining figure ---- */
+  .hero{margin-bottom:22px;}
+  .hero .amount{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:clamp(2.1rem, 9vw, 2.7rem);
+    line-height:1.05;
+  }
+  .hero .amount.over{color:var(--rust);}
+  .hero .sub{
+    font-size:0.85rem;
+    color:var(--ink-soft);
+    margin-top:4px;
+  }
+
+  /* ---- Ruler / pace comparison (signature element) ---- */
+  .ruler-block{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:16px 16px 12px;
+    margin-bottom:20px;
+  }
+  .ruler-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--ink-soft);
+    margin-bottom:12px;
+  }
+  .track-row{margin-bottom:12px;}
+  .track-row:last-child{margin-bottom:2px;}
+  .track-label{
+    display:flex; justify-content:space-between;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.68rem;
+    color:var(--ink-soft);
+    margin-bottom:5px;
+  }
+  .track{
+    position:relative;
+    height:8px;
+    background:var(--line);
+    border-radius:4px;
+    overflow:visible;
+  }
+  .track-fill{
+    position:absolute; left:0; top:0; bottom:0;
+    border-radius:4px;
+    background:var(--ink);
+  }
+  .track-fill.money{background:var(--sage);}
+  .track-fill.money.over{background:var(--rust);}
+  .track-marker{
+    position:absolute; top:50%; width:10px; height:10px;
+    background:var(--paper-raised);
+    border:2px solid var(--ink);
+    border-radius:50%;
+    transform:translate(-50%,-50%);
+  }
+
+  /* ---- Insight card ---- */
+  .insight{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:var(--ink);
+    color:var(--paper);
+    border-radius:8px;
+    padding:14px 16px;
+    margin-bottom:24px;
+  }
+  .insight .figure{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:1.5rem;
+    white-space:nowrap;
+  }
+  .insight .text{
+    font-size:0.78rem;
+    line-height:1.35;
+    color:#D8D2C2;
+  }
+  .insight .text b{color:var(--paper);}
+
+  /* ---- Quick add form ---- */
+  .section-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--ink-soft);
+    margin:0 0 10px;
+  }
+  form.add-form{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:26px;
+  }
+  .amt-field{
+    position:relative;
+    flex:1 1 90px;
+  }
+  .amt-field span{
+    position:absolute; left:10px; top:50%; transform:translateY(-50%);
+    color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; font-size:0.85rem;
+  }
+  .amt-field input{padding-left:20px;}
+  .add-form input, .add-form select{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:0.85rem;
+    border:1px solid var(--line);
+    background:var(--paper-raised);
+    border-radius:6px;
+    padding:9px 10px;
+    color:var(--ink);
+  }
+  .add-form input[type=number]{width:100%;}
+  .add-form select{flex:1 1 100px;}
+  .add-form input[name=note]{flex:2 1 130px;}
+  .add-form button{
+    flex:1 1 100%;
+    background:var(--brass);
+    color:var(--paper);
+    border:none;
+    border-radius:6px;
+    padding:10px;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600;
+    font-size:0.85rem;
+    cursor:pointer;
+    letter-spacing:0.02em;
+  }
+  .add-form button:active{opacity:0.85;}
+
+  /* ---- Transactions list, dotted-leader ledger rows ---- */
+  .tx-row{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    padding:9px 0;
+    border-bottom:1px solid var(--line);
+    font-size:0.85rem;
+  }
+  .tx-cat-dot{
+    width:8px;height:8px;border-radius:50%;
+    flex-shrink:0;
+    margin-bottom:2px;
+  }
+  .tx-date{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    color:var(--ink-soft);
+    flex-shrink:0;
+    width:44px;
+  }
+  .tx-desc{
+    flex:1;
+    overflow:hidden;
+    white-space:nowrap;
+    position:relative;
+  }
+  .tx-desc .leader{
+    display:inline-block;
+    overflow:hidden;
+    white-space:nowrap;
+    letter-spacing:2px;
+    color:var(--line);
+    width:100%;
+  }
+  .tx-name{color:var(--ink);}
+  .tx-amt{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.85rem;
+    flex-shrink:0;
+  }
+  .tx-del{
+    background:none;border:none;color:var(--ink-soft);
+    cursor:pointer; font-size:0.9rem; padding:0 0 0 4px; line-height:1;
+    flex-shrink:0;
+  }
+  .empty-state{
+    color:var(--ink-soft);
+    font-size:0.85rem;
+    padding:18px 0;
+    text-align:center;
+    border:1px dashed var(--line);
+    border-radius:8px;
+  }
+  .loading{
+    text-align:center;
+    color:var(--ink-soft);
+    padding:60px 0;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.8rem;
+  }
+</style>
+</head>
+<body>
+<div class="page" id="app">
+  <div class="loading">Opening the ledger…</div>
+</div>
+
+<script>
+const CATEGORIES = [
+  {id:'food', label:'Food', color:'var(--rust)'},
+  {id:'transport', label:'Transport', color:'var(--teal)'},
+  {id:'shopping', label:'Shopping', color:'var(--plum)'},
+  {id:'bills', label:'Bills', color:'var(--ink-soft)'},
+  {id:'fun', label:'Fun', color:'var(--brass)'},
+  {id:'other', label:'Other', color:'var(--sage)'}
+];
+const STORE_KEY = 'ledger-data';
+
+let state = { budget: null, transactions: [], cycleStartDay: 1 };
+let editingBudget = false;
+let editingCycle = false;
+
+function catInfo(id){ return CATEGORIES.find(c=>c.id===id) || CATEGORIES[CATEGORIES.length-1]; }
+function fmt(n){ return '$' + n.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function dateOnly(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function shortDate(d){ return d.toLocaleDateString(undefined,{month:'short', day:'numeric'}); }
+function ordinal(n){
+  const s = ['th','st','nd','rd'], v = n%100;
+  return n + (s[(v-20)%10] || s[v] || s[0]);
+}
+
+// Given a reference date and the day-of-month a new cycle begins on,
+// return {start, end} date-only bounds of the cycle containing refDate.
+function getCycleBounds(refDate, startDay){
+  const ref = dateOnly(refDate);
+  let cycleMonth = ref.getMonth(), cycleYear = ref.getFullYear();
+  if(ref.getDate() < startDay){
+    cycleMonth -= 1;
+    if(cycleMonth < 0){ cycleMonth = 11; cycleYear -= 1; }
+  }
+  const daysInStartMonth = new Date(cycleYear, cycleMonth+1, 0).getDate();
+  const clampedStart = Math.min(startDay, daysInStartMonth);
+  const start = new Date(cycleYear, cycleMonth, clampedStart);
+  const end = new Date(start);
+  end.setMonth(end.getMonth()+1);
+  end.setDate(end.getDate()-1);
+  return { start, end };
+}
+
+async function loadData(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){
+      state = Object.assign({budget:null, transactions:[], cycleStartDay:1}, JSON.parse(raw));
+    }
+  }catch(e){
+    // no data yet, keep defaults
+  }
+  render();
+}
+
+async function saveData(){
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  }catch(e){
+    console.error('Could not save', e);
+  }
+}
+
+function currentMonthTransactions(bounds){
+  return state.transactions.filter(t=>{
+    const d = dateOnly(new Date(t.date));
+    return d >= bounds.start && d <= bounds.end;
+  });
+}
+
+function render(){
+  const app = document.getElementById('app');
+  const now = new Date();
+  const bounds = getCycleBounds(now, state.cycleStartDay || 1);
+  const monthLabel = `${shortDate(bounds.start)} – ${shortDate(bounds.end)}`.toUpperCase();
+  const daysInMonth = Math.round((bounds.end - bounds.start)/86400000) + 1;
+  const today = Math.round((dateOnly(now) - bounds.start)/86400000) + 1;
+  const monthTx = currentMonthTransactions(bounds).sort((a,b)=> new Date(b.date)-new Date(a.date));
+  const spent = monthTx.reduce((s,t)=> s + t.amount, 0);
+  const budget = state.budget;
+  const remaining = budget!=null ? budget - spent : null;
+
+  let html = '';
+
+  // Header
+  html += `
+    <div class="header">
+      <div class="brand">
+        <div class="stamp">$</div>
+        <div class="brand-text">Ledger</div>
+      </div>
+      <div class="month-label">${monthLabel}</div>
+    </div>`;
+
+  // Budget row
+  if(editingBudget || budget==null){
+    html += `
+      <div class="budget-row">
+        <span class="label">MONTHLY BUDGET</span>
+        <div class="budget-input-row">
+          <input type="number" id="budgetInput" placeholder="e.g. 2400" min="0" step="1" value="${budget!=null?budget:''}">
+          <button id="budgetSaveBtn">Set</button>
+        </div>
+      </div>`;
+  } else {
+    html += `
+      <div class="budget-row">
+        <span class="label">MONTHLY BUDGET · ${fmt(budget)}</span>
+        <button class="budget-edit-btn" id="budgetEditBtn">edit</button>
+      </div>`;
+  }
+
+  // Cycle start row
+  if(editingCycle){
+    html += `
+      <div class="cycle-row">
+        <span class="label">CYCLE STARTS ON</span>
+        <div class="cycle-input-row">
+          <select id="cycleInput">
+            ${Array.from({length:28},(_,i)=>i+1).map(n=>`<option value="${n}" ${n===(state.cycleStartDay||1)?'selected':''}>${n===1?'1st (calendar month)':ordinal(n)}</option>`).join('')}
+          </select>
+          <button id="cycleSaveBtn">Set</button>
+        </div>
+      </div>`;
+  } else {
+    const cd = state.cycleStartDay || 1;
+    html += `
+      <div class="cycle-row">
+        <span class="label">${cd===1? 'TRACKING · CALENDAR MONTH' : 'TRACKING FROM DAY '+cd+' EACH MONTH'}</span>
+        <button class="budget-edit-btn" id="cycleEditBtn">${cd===1? 'track from pay day':'edit'}</button>
+      </div>`;
+  }
+
+  if(budget!=null){
+    const over = remaining < 0;
+    html += `
+      <div class="hero">
+        <div class="amount ${over?'over':''}">${over? fmt(Math.abs(remaining))+' over' : fmt(remaining)}</div>
+        <div class="sub">${over? 'over your budget of '+fmt(budget) : 'remaining of '+fmt(budget)} · ${spent>0? fmt(spent)+' spent so far':'nothing logged yet'}</div>
+      </div>`;
+
+    // Ruler: time elapsed vs money spent
+    const timePct = Math.min(100, (today/daysInMonth)*100);
+    const moneyPct = Math.min(100, (spent/budget)*100);
+    const moneyOver = spent > budget;
+    html += `
+      <div class="ruler-block">
+        <div class="ruler-title">Pace this month</div>
+        <div class="track-row">
+          <div class="track-label"><span>${shortDate(bounds.start)}</span><span>${shortDate(bounds.end)}</span></div>
+          <div class="track">
+            <div class="track-fill" style="width:${timePct}%"></div>
+            <div class="track-marker" style="left:${timePct}%"></div>
+          </div>
+        </div>
+        <div class="track-row">
+          <div class="track-label"><span>$0</span><span>${fmt(budget)}</span></div>
+          <div class="track">
+            <div class="track-fill money ${moneyOver?'over':''}" style="width:${moneyPct}%"></div>
+          </div>
+        </div>
+      </div>`;
+
+    // Insight
+    const daysRemaining = Math.max(1, daysInMonth - today + 1);
+    const suggestedDaily = remaining>0 ? remaining/daysRemaining : 0;
+    const idealSpentByNow = budget * (today/daysInMonth);
+    const paceDiff = idealSpentByNow - spent; // positive = under pace
+
+    let insightText;
+    let figure;
+    if(remaining <= 0){
+      figure = fmt(0);
+      insightText = `You've used up this month's budget. <b>${fmt(Math.abs(remaining))}</b> over, with ${daysRemaining} day${daysRemaining===1?'':'s'} left.`;
+    } else {
+      figure = fmt(suggestedDaily);
+      const paceMsg = paceDiff >= 0
+        ? `You're <b>${fmt(Math.abs(paceDiff))} under</b> pace for today.`
+        : `You're <b>${fmt(Math.abs(paceDiff))} over</b> pace for today.`;
+      insightText = `Suggested max spend per day for the rest of the month, to stay on budget. ${paceMsg}`;
+    }
+    html += `
+      <div class="insight">
+        <div class="figure">${figure}${remaining>0?'<span style=\"font-size:0.9rem;\">/day</span>':''}</div>
+        <div class="text">${insightText}</div>
+      </div>`;
+  } else {
+    html += `<div class="empty-state" style="margin-bottom:24px;">Set a monthly budget above to see your remaining balance and daily spend suggestion.</div>`;
+  }
+
+  // Quick add form
+  html += `
+    <div class="section-title">Log a transaction</div>
+    <form class="add-form" id="addForm">
+      <div class="amt-field"><span>$</span><input type="number" name="amount" placeholder="0.00" step="0.01" min="0" required></div>
+      <select name="category">
+        ${CATEGORIES.map(c=>`<option value="${c.id}">${c.label}</option>`).join('')}
+      </select>
+      <input type="text" name="note" placeholder="Note (optional)" maxlength="40">
+      <button type="submit">Add transaction</button>
+    </form>`;
+
+  // Transaction list
+  html += `<div class="section-title">This month's transactions</div>`;
+  if(monthTx.length===0){
+    html += `<div class="empty-state">No transactions yet — log your first one above.</div>`;
+  } else {
+    html += monthTx.map(t=>{
+      const c = catInfo(t.category);
+      const d = new Date(t.date);
+      const dateStr = d.toLocaleDateString(undefined,{month:'short', day:'numeric'});
+      const name = (t.note && t.note.trim()) ? t.note.trim() : c.label;
+      return `
+        <div class="tx-row">
+          <span class="tx-cat-dot" style="background:${c.color}"></span>
+          <span class="tx-date">${dateStr}</span>
+          <span class="tx-desc"><span class="leader">${escapeHtml(name)} ${'.'.repeat(60)}</span></span>
+          <span class="tx-amt">${fmt(t.amount)}</span>
+          <button class="tx-del" data-id="${t.id}" title="Delete">✕</button>
+        </div>`;
+    }).join('');
+  }
+
+  app.innerHTML = html;
+  attachHandlers();
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function attachHandlers(){
+  const editBtn = document.getElementById('budgetEditBtn');
+  if(editBtn) editBtn.onclick = ()=>{ editingBudget = true; render(); };
+
+  const saveBtn = document.getElementById('budgetSaveBtn');
+  if(saveBtn) saveBtn.onclick = async ()=>{
+    const input = document.getElementById('budgetInput');
+    const val = parseFloat(input.value);
+    if(!isNaN(val) && val >= 0){
+      state.budget = val;
+      editingBudget = false;
+      await saveData();
+      render();
+    }
+  };
+
+  const cycleEditBtn = document.getElementById('cycleEditBtn');
+  if(cycleEditBtn) cycleEditBtn.onclick = ()=>{ editingCycle = true; render(); };
+
+  const cycleSaveBtn = document.getElementById('cycleSaveBtn');
+  if(cycleSaveBtn) cycleSaveBtn.onclick = async ()=>{
+    const select = document.getElementById('cycleInput');
+    state.cycleStartDay = parseInt(select.value, 10);
+    editingCycle = false;
+    await saveData();
+    render();
+  };
+
+  const form = document.getElementById('addForm');
+  if(form) form.onsubmit = async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(form);
+    const amount = parseFloat(fd.get('amount'));
+    if(isNaN(amount) || amount <= 0) return;
+    state.transactions.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      amount: amount,
+      category: fd.get('category'),
+      note: fd.get('note') || '',
+      date: new Date().toISOString()
+    });
+    await saveData();
+    render();
+  };
+
+  document.querySelectorAll('.tx-del').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.getAttribute('data-id');
+      state.transactions = state.transactions.filter(t=>t.id!==id);
+      await saveData();
+      render();
+    };
+  });
+}
+
+loadData();
+</script>
+</body>
+</html>
