@@ -368,7 +368,7 @@
 </div>
 
 <script>
-const CATEGORIES = [
+  const CATEGORIES = [
   {id:'food', label:'Food', color:'var(--rust)'},
   {id:'transport', label:'Transport', color:'var(--teal)'},
   {id:'shopping', label:'Shopping', color:'var(--plum)'},
@@ -391,8 +391,6 @@ function ordinal(n){
   return n + (s[(v-20)%10] || s[v] || s[0]);
 }
 
-// Given a reference date and the day-of-month a new cycle begins on,
-// return {start, end} date-only bounds of the cycle containing refDate.
 function getCycleBounds(refDate, startDay){
   const ref = dateOnly(refDate);
   let cycleMonth = ref.getMonth(), cycleYear = ref.getFullYear();
@@ -409,58 +407,138 @@ function getCycleBounds(refDate, startDay){
   return { start, end };
 }
 
-async function loadData(){
+function loadData(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
     if(raw){
       state = Object.assign({budget:null, transactions:[], cycleStartDay:1, recurring:[]}, JSON.parse(raw));
     }
   }catch(e){
-    // no data yet, keep defaults
+    console.error('Could not load data', e);
   }
   render();
 }
 
-async function saveData(){
+function saveData(){
   try{
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
   }catch(e){
-    console.error('Could not save', e);
+    console.error('Could not save data', e);
   }
 }
 
 function downloadBackup(){
   const payload={app:'Ledger',version:2,exportedAt:new Date().toISOString(),data:state};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob); const a=document.createElement('a');
-  a.href=url; a.download='ledger-backup-'+new Date().toISOString().slice(0,10)+'.json';
-  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  const url=URL.createObjectURL(blob); 
+  const a=document.createElement('a');
+  a.href=url; 
+  a.download='ledger-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); 
+  a.click(); 
+  a.remove(); 
+  URL.revokeObjectURL(url);
 }
 
 function importBackup(file){
-  if(!file)return; const reader=new FileReader();
-  reader.onload=async e=>{try{const parsed=JSON.parse(e.target.result);const imported=parsed.data||parsed;
-    if(!imported||!Array.isArray(imported.transactions))throw new Error('Invalid backup');
-    if(!confirm('Import this backup? Your current Ledger data will be replaced.'))return;
-    state=Object.assign({budget:null,transactions:[],cycleStartDay:1,recurring:[]},imported);
-    await saveData();render();alert('Backup restored successfully.');
-  }catch(err){alert('Could not restore this backup. Please choose a valid Ledger JSON file.');}}; reader.readAsText(file);
+  if(!file) return; 
+  const reader=new FileReader();
+  reader.onload = e => {
+    try{
+      const parsed=JSON.parse(e.target.result);
+      const imported=parsed.data||parsed;
+      if(!imported||!Array.isArray(imported.transactions)) throw new Error('Invalid backup');
+      if(!confirm('Import this backup? Your current Ledger data will be replaced.')) return;
+      state=Object.assign({budget:null,transactions:[],cycleStartDay:1,recurring:[]},imported);
+      saveData();
+      render();
+      alert('Backup restored successfully.');
+    }catch(err){
+      alert('Could not restore this backup. Please choose a valid Ledger JSON file.');
+    }
+  }; 
+  reader.readAsText(file);
 }
 
 function addRecurring(){
-  const name=prompt('Recurring expense name:'); if(!name||!name.trim())return;
-  const amount=parseFloat(prompt('Monthly amount in Rand:')); if(isNaN(amount)||amount<=0)return;
+  const name=prompt('Recurring expense name:'); 
+  if(!name||!name.trim()) return;
+  const amount=parseFloat(prompt('Monthly amount in Rand:')); 
+  if(isNaN(amount)||amount<=0) return;
   const category=prompt('Category (food, transport, shopping, bills, fun, other):','bills')||'bills';
-  state.recurring=state.recurring||[]; state.recurring.push({id:Date.now().toString(36),name:name.trim(),amount,category:CATEGORIES.some(c=>c.id===category)?category:'bills'});
-  saveData().then(render);
+  state.recurring=state.recurring||[]; 
+  state.recurring.push({
+    id:Date.now().toString(36),
+    name:name.trim(),
+    amount,
+    category:CATEGORIES.some(c=>c.id===category)?category:'bills'
+  });
+  saveData();
+  render();
 }
-function removeRecurring(id){state.recurring=(state.recurring||[]).filter(r=>r.id!==id);saveData().then(render);}
+
+function removeRecurring(id){
+  state.recurring=(state.recurring||[]).filter(r=>r.id!==id);
+  saveData();
+  render();
+}
 
 function currentMonthTransactions(bounds){
   return state.transactions.filter(t=>{
     const d = dateOnly(new Date(t.date));
     return d >= bounds.start && d <= bounds.end;
   });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function editTransaction(id){
+  const t=state.transactions.find(x=>x.id===id); 
+  if(!t) return; 
+  const d=new Date(t.date);
+  const dateValue=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  
+  const b=document.createElement('div'); 
+  b.className='modal-backdrop'; 
+  b.innerHTML=`
+    <div class="modal">
+      <h3>Edit transaction</h3>
+      <label>Amount</label>
+      <input id="editAmount" type="number" min="0.01" step="0.01" value="${t.amount}">
+      <label>Category</label>
+      <select id="editCategory">
+        ${CATEGORIES.map(c=>`<option value="${c.id}" ${c.id===t.category?'selected':''}>${c.label}</option>`).join('')}
+      </select>
+      <label>Note</label>
+      <input id="editNote" type="text" maxlength="40" value="${escapeHtml(t.note||'')}">
+      <label>Date</label>
+      <input id="editDate" type="date" value="${dateValue}">
+      <div class="modal-actions">
+        <button class="modal-cancel">Cancel</button>
+        <button class="modal-save">Save changes</button>
+      </div>
+    </div>`;
+  
+  document.body.appendChild(b); 
+  b.querySelector('.modal-cancel').onclick=()=>b.remove();
+  b.querySelector('.modal-save').onclick=()=>{
+    const amount=parseFloat(document.getElementById('editAmount').value);
+    const dateStr=document.getElementById('editDate').value;
+    if(isNaN(amount)||amount<=0||!dateStr) return;
+    
+    t.amount=amount;
+    t.category=document.getElementById('editCategory').value;
+    t.note=document.getElementById('editNote').value;
+    
+    const [y, m, day] = dateStr.split('-').map(Number);
+    t.date = new Date(y, m - 1, day, 12, 0, 0).toISOString();
+    
+    b.remove();
+    saveData();
+    render();
+  };
 }
 
 function render(){
@@ -550,7 +628,7 @@ function render(){
         <div class="sub">${leftTodayOver ? 'over today’s suggested allowance' : 'left to spend today'} · ${fmt(remaining)} remaining in total</div>
       </div>`;
 
-    // Ruler: time elapsed vs money spent
+    // Pace comparison
     const timePct = Math.min(100, (today/daysInMonth)*100);
     const moneyPct = Math.min(100, (spent/budget)*100);
     const moneyOver = spent > budget;
@@ -565,16 +643,16 @@ function render(){
           </div>
         </div>
         <div class="track-row">
-          <div class="track-label"><span>$0</span><span>${fmt(budget)}</span></div>
+          <div class="track-label"><span>R0</span><span>${fmt(budget)}</span></div>
           <div class="track">
             <div class="track-fill money ${moneyOver?'over':''}" style="width:${moneyPct}%"></div>
           </div>
         </div>
       </div>`;
 
-    // Insight
+    // Insight card
     const idealSpentByNow = budget * (today/daysInMonth);
-    const paceDiff = idealSpentByNow - spent; // positive = under pace
+    const paceDiff = idealSpentByNow - spent;
 
     let insightText;
     let figure;
@@ -590,7 +668,7 @@ function render(){
     }
     html += `
       <div class="insight">
-        <div class="figure">${figure}${remaining>0?'<span style=\"font-size:0.9rem;\">/day</span>':''}</div>
+        <div class="figure">${figure}${remaining>0?'<span style="font-size:0.9rem;">/day</span>':''}</div>
         <div class="text">${insightText}</div>
       </div>`;
   } else {
@@ -601,6 +679,9 @@ function render(){
     const catTotals=CATEGORIES.map(c=>({...c,total:monthTx.filter(t=>t.category===c.id).reduce((s,t)=>s+t.amount,0)}));
     const maxCat=Math.max(1,...catTotals.map(c=>c.total));
     const avgDaily=spent/Math.max(1,today);
+    const daysRemaining = Math.max(1, daysInMonth - today + 1);
+    const suggestedDaily = remaining > 0 ? remaining / daysRemaining : 0;
+
     html += `<div class="section-title">At a glance</div><div class="dashboard-grid">
       <div class="stat-card"><div class="stat-label">Spent today</div><div class="stat-value">${fmt(spentToday)}</div></div>
       <div class="stat-card"><div class="stat-label">Average per day</div><div class="stat-value">${fmt(avgDaily)}</div></div>
@@ -647,81 +728,83 @@ function render(){
   }
 
   app.innerHTML = html;
-  attachHandlers();
 }
 
-function escapeHtml(s){
-  return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
+// Global Event Listeners using Delegation
+document.addEventListener('click', (e) => {
+  const target = e.target;
 
-function editTransaction(id){
-  const t=state.transactions.find(x=>x.id===id); if(!t)return; const d=new Date(t.date);
-  const dateValue=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const b=document.createElement('div'); b.className='modal-backdrop'; b.innerHTML=`<div class="modal"><h3>Edit transaction</h3><label>Amount</label><input id="editAmount" type="number" min="0.01" step="0.01" value="${t.amount}"><label>Category</label><select id="editCategory">${CATEGORIES.map(c=>`<option value="${c.id}" ${c.id===t.category?'selected':''}>${c.label}</option>`).join('')}</select><label>Note</label><input id="editNote" type="text" maxlength="40" value="${escapeHtml(t.note||'')}"><label>Date</label><input id="editDate" type="date" value="${dateValue}"><div class="modal-actions"><button class="modal-cancel">Cancel</button><button class="modal-save">Save changes</button></div></div>`;
-  document.body.appendChild(b); b.querySelector('.modal-cancel').onclick=()=>b.remove();
-  b.querySelector('.modal-save').onclick=async()=>{const amount=parseFloat(document.getElementById('editAmount').value),date=document.getElementById('editDate').value;if(isNaN(amount)||amount<=0||!date)return;t.amount=amount;t.category=document.getElementById('editCategory').value;t.note=document.getElementById('editNote').value;t.date=new Date(date+'T12:00:00').toISOString();b.remove();await saveData();render();};
-}
-
-function attachHandlers(){
-  const exportBtn=document.getElementById('exportBtn'), importBtn=document.getElementById('importBtn'), importFile=document.getElementById('importFile');
-  if(exportBtn) exportBtn.onclick=downloadBackup;
-  if(importBtn&&importFile){importBtn.onclick=()=>importFile.click();importFile.onchange=()=>{importBackup(importFile.files[0]);importFile.value='';};}
-  const addRecurringBtn=document.getElementById('addRecurringBtn'); if(addRecurringBtn)addRecurringBtn.onclick=addRecurring;
-  document.querySelectorAll('.recurring-del').forEach(btn=>btn.onclick=()=>removeRecurring(btn.getAttribute('data-id')));
-  document.querySelectorAll('.tx-edit').forEach(btn=>btn.onclick=()=>editTransaction(btn.getAttribute('data-id')));
-  const editBtn = document.getElementById('budgetEditBtn');
-  if(editBtn) editBtn.onclick = ()=>{ editingBudget = true; render(); };
-
-  const saveBtn = document.getElementById('budgetSaveBtn');
-  if(saveBtn) saveBtn.onclick = async ()=>{
+  if (target.id === 'exportBtn') {
+    downloadBackup();
+  } else if (target.id === 'importBtn') {
+    const importFile = document.getElementById('importFile');
+    if (importFile) importFile.click();
+  } else if (target.id === 'addRecurringBtn') {
+    addRecurring();
+  } else if (target.classList.contains('recurring-del')) {
+    removeRecurring(target.getAttribute('data-id'));
+  } else if (target.classList.contains('tx-edit')) {
+    editTransaction(target.getAttribute('data-id'));
+  } else if (target.classList.contains('tx-del') && !target.classList.contains('recurring-del')) {
+    const id = target.getAttribute('data-id');
+    state.transactions = state.transactions.filter(t => t.id !== id);
+    saveData();
+    render();
+  } else if (target.id === 'budgetEditBtn') {
+    editingBudget = true;
+    render();
+  } else if (target.id === 'budgetSaveBtn') {
     const input = document.getElementById('budgetInput');
     const val = parseFloat(input.value);
-    if(!isNaN(val) && val >= 0){
+    if (!isNaN(val) && val >= 0) {
       state.budget = val;
       editingBudget = false;
-      await saveData();
+      saveData();
       render();
     }
-  };
-
-  const cycleEditBtn = document.getElementById('cycleEditBtn');
-  if(cycleEditBtn) cycleEditBtn.onclick = ()=>{ editingCycle = true; render(); };
-
-  const cycleSaveBtn = document.getElementById('cycleSaveBtn');
-  if(cycleSaveBtn) cycleSaveBtn.onclick = async ()=>{
+  } else if (target.id === 'cycleEditBtn') {
+    editingCycle = true;
+    render();
+  } else if (target.id === 'cycleSaveBtn') {
     const select = document.getElementById('cycleInput');
     state.cycleStartDay = parseInt(select.value, 10);
     editingCycle = false;
-    await saveData();
+    saveData();
     render();
-  };
+  }
+});
 
-  const form = document.getElementById('addForm');
-  if(form) form.onsubmit = async (e)=>{
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'importFile' && e.target.files.length > 0) {
+    importBackup(e.target.files[0]);
+    e.target.value = '';
+  }
+});
+
+document.addEventListener('submit', (e) => {
+  if (e.target.id === 'addForm') {
     e.preventDefault();
+    const form = e.target;
     const fd = new FormData(form);
     const amount = parseFloat(fd.get('amount'));
-    if(isNaN(amount) || amount <= 0) return;
+    if (isNaN(amount) || amount <= 0) return;
+    
+    const rawDate = fd.get('date') || new Date().toISOString().slice(0, 10);
+    const [y, m, day] = rawDate.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, day, 12, 0, 0);
+
     state.transactions.push({
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       amount: amount,
       category: fd.get('category'),
       note: fd.get('note') || '',
-      date: new Date((fd.get('date') || new Date().toISOString().slice(0,10)) + 'T12:00:00').toISOString()
+      date: dateObj.toISOString()
     });
-    await saveData();
+    
+    saveData();
     render();
-  };
-
-  document.querySelectorAll('.tx-del').forEach(btn=>{
-    btn.onclick = async ()=>{
-      const id = btn.getAttribute('data-id');
-      state.transactions = state.transactions.filter(t=>t.id!==id);
-      await saveData();
-      render();
-    };
-  });
-}
+  }
+});
 
 loadData();
 </script>
