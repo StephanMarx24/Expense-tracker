@@ -262,6 +262,7 @@
   .add-form input[type=number]{width:100%;}
   .add-form select{flex:1 1 100px;}
   .add-form input[name=note]{flex:2 1 130px;}
+  .add-form input[type=date]{flex:1 1 130px;}
   .add-form button{
     flex:1 1 100%;
     background:var(--brass);
@@ -331,6 +332,27 @@
     border:1px dashed var(--line);
     border-radius:8px;
   }
+  .backup-row{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap;}
+  .backup-btn{flex:1 1 120px;background:none;border:1px solid var(--line);color:var(--ink-soft);border-radius:6px;padding:8px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:.78rem;cursor:pointer;}
+  .backup-btn:hover{background:var(--paper-raised);color:var(--ink);}
+  .dashboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;}
+  .stat-card{background:var(--paper-raised);border:1px solid var(--line);border-radius:8px;padding:12px 14px;}
+  .stat-label{font-family:'IBM Plex Mono',monospace;font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);}
+  .stat-value{font-family:'Fraunces',serif;font-size:1.35rem;font-weight:600;margin-top:4px;}
+  .category-row{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:.78rem;}
+  .category-name{width:72px;flex-shrink:0;}
+  .category-bar{height:7px;background:var(--line);border-radius:4px;overflow:hidden;flex:1;}
+  .category-fill{height:100%;border-radius:4px;}
+  .category-amount{font-family:'IBM Plex Mono',monospace;width:72px;text-align:right;font-size:.72rem;}
+  .tx-edit{background:none;border:none;color:var(--brass);cursor:pointer;font-size:.72rem;padding:0 2px;flex-shrink:0;}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(35,46,59,.35);display:flex;align-items:center;justify-content:center;padding:18px;z-index:10;}
+  .modal{width:min(100%,420px);background:var(--paper-raised);border:1px solid var(--line);border-radius:10px;padding:18px;box-shadow:0 12px 35px rgba(0,0,0,.18);}
+  .modal h3{font-family:'Fraunces',serif;margin:0 0 14px;font-size:1.2rem;}
+  .modal label{display:block;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--ink-soft);text-transform:uppercase;margin:10px 0 5px;}
+  .modal input,.modal select{width:100%;font-family:'IBM Plex Sans',sans-serif;font-size:.85rem;border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:9px;color:var(--ink);}
+  .modal-actions{display:flex;gap:8px;margin-top:16px;}
+  .modal-actions button{flex:1;border:0;border-radius:6px;padding:9px;cursor:pointer;}
+  .modal-save{background:var(--brass);color:var(--paper);}.modal-cancel{background:var(--line);color:var(--ink);}
   .loading{
     text-align:center;
     color:var(--ink-soft);
@@ -356,12 +378,12 @@ const CATEGORIES = [
 ];
 const STORE_KEY = 'ledger-data';
 
-let state = { budget: null, transactions: [], cycleStartDay: 1 };
+let state = { budget: null, transactions: [], cycleStartDay: 1, recurring: [] };
 let editingBudget = false;
 let editingCycle = false;
 
 function catInfo(id){ return CATEGORIES.find(c=>c.id===id) || CATEGORIES[CATEGORIES.length-1]; }
-function fmt(n){ return '$' + n.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmt(n){ return 'R' + n.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
 function dateOnly(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 function shortDate(d){ return d.toLocaleDateString(undefined,{month:'short', day:'numeric'}); }
 function ordinal(n){
@@ -391,7 +413,7 @@ async function loadData(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
     if(raw){
-      state = Object.assign({budget:null, transactions:[], cycleStartDay:1}, JSON.parse(raw));
+      state = Object.assign({budget:null, transactions:[], cycleStartDay:1, recurring:[]}, JSON.parse(raw));
     }
   }catch(e){
     // no data yet, keep defaults
@@ -406,6 +428,33 @@ async function saveData(){
     console.error('Could not save', e);
   }
 }
+
+function downloadBackup(){
+  const payload={app:'Ledger',version:2,exportedAt:new Date().toISOString(),data:state};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download='ledger-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+function importBackup(file){
+  if(!file)return; const reader=new FileReader();
+  reader.onload=async e=>{try{const parsed=JSON.parse(e.target.result);const imported=parsed.data||parsed;
+    if(!imported||!Array.isArray(imported.transactions))throw new Error('Invalid backup');
+    if(!confirm('Import this backup? Your current Ledger data will be replaced.'))return;
+    state=Object.assign({budget:null,transactions:[],cycleStartDay:1,recurring:[]},imported);
+    await saveData();render();alert('Backup restored successfully.');
+  }catch(err){alert('Could not restore this backup. Please choose a valid Ledger JSON file.');}}; reader.readAsText(file);
+}
+
+function addRecurring(){
+  const name=prompt('Recurring expense name:'); if(!name||!name.trim())return;
+  const amount=parseFloat(prompt('Monthly amount in Rand:')); if(isNaN(amount)||amount<=0)return;
+  const category=prompt('Category (food, transport, shopping, bills, fun, other):','bills')||'bills';
+  state.recurring=state.recurring||[]; state.recurring.push({id:Date.now().toString(36),name:name.trim(),amount,category:CATEGORIES.some(c=>c.id===category)?category:'bills'});
+  saveData().then(render);
+}
+function removeRecurring(id){state.recurring=(state.recurring||[]).filter(r=>r.id!==id);saveData().then(render);}
 
 function currentMonthTransactions(bounds){
   return state.transactions.filter(t=>{
@@ -423,7 +472,13 @@ function render(){
   const today = Math.round((dateOnly(now) - bounds.start)/86400000) + 1;
   const monthTx = currentMonthTransactions(bounds).sort((a,b)=> new Date(b.date)-new Date(a.date));
   const spent = monthTx.reduce((s,t)=> s + t.amount, 0);
+  const todayTx = monthTx.filter(t => {
+    const d = dateOnly(new Date(t.date));
+    return d.getTime() === dateOnly(now).getTime();
+  });
+  const spentToday = todayTx.reduce((s,t)=> s + t.amount, 0);
   const budget = state.budget;
+  const recurringTotal = (state.recurring||[]).reduce((s,r)=>s+Number(r.amount||0),0);
   const remaining = budget!=null ? budget - spent : null;
 
   let html = '';
@@ -432,11 +487,16 @@ function render(){
   html += `
     <div class="header">
       <div class="brand">
-        <div class="stamp">$</div>
+        <div class="stamp">R</div>
         <div class="brand-text">Ledger</div>
       </div>
-      <div class="month-label">${monthLabel}</div>
+      <div>
+        <div class="month-label">${monthLabel}</div>
+        <div class="date-label">TODAY · ${now.toLocaleDateString(undefined,{day:'numeric', month:'short', year:'numeric'})}</div>
+      </div>
     </div>`;
+
+  html += `<div class="backup-row"><button class="backup-btn" id="exportBtn">Export JSON backup</button><button class="backup-btn" id="importBtn">Restore JSON backup</button><input type="file" id="importFile" accept=".json,application/json" style="display:none"></div>`;
 
   // Budget row
   if(editingBudget || budget==null){
@@ -444,7 +504,7 @@ function render(){
       <div class="budget-row">
         <span class="label">MONTHLY BUDGET</span>
         <div class="budget-input-row">
-          <input type="number" id="budgetInput" placeholder="e.g. 2400" min="0" step="1" value="${budget!=null?budget:''}">
+          <input type="number" id="budgetInput" placeholder="e.g. 24000" min="0" step="1" value="${budget!=null?budget:''}">
           <button id="budgetSaveBtn">Set</button>
         </div>
       </div>`;
@@ -479,10 +539,15 @@ function render(){
 
   if(budget!=null){
     const over = remaining < 0;
+    const daysRemaining = Math.max(1, daysInMonth - today + 1);
+    const suggestedDaily = remaining > 0 ? remaining / daysRemaining : 0;
+    const leftToday = suggestedDaily - spentToday;
+    const leftTodayOver = leftToday < 0;
+
     html += `
       <div class="hero">
-        <div class="amount ${over?'over':''}">${over? fmt(Math.abs(remaining))+' over' : fmt(remaining)}</div>
-        <div class="sub">${over? 'over your budget of '+fmt(budget) : 'remaining of '+fmt(budget)} · ${spent>0? fmt(spent)+' spent so far':'nothing logged yet'}</div>
+        <div class="amount ${leftTodayOver?'over':''}">${leftTodayOver ? fmt(Math.abs(leftToday))+' over' : fmt(leftToday)}</div>
+        <div class="sub">${leftTodayOver ? 'over today’s suggested allowance' : 'left to spend today'} · ${fmt(remaining)} remaining in total</div>
       </div>`;
 
     // Ruler: time elapsed vs money spent
@@ -508,8 +573,6 @@ function render(){
       </div>`;
 
     // Insight
-    const daysRemaining = Math.max(1, daysInMonth - today + 1);
-    const suggestedDaily = remaining>0 ? remaining/daysRemaining : 0;
     const idealSpentByNow = budget * (today/daysInMonth);
     const paceDiff = idealSpentByNow - spent; // positive = under pace
 
@@ -517,13 +580,13 @@ function render(){
     let figure;
     if(remaining <= 0){
       figure = fmt(0);
-      insightText = `You've used up this month's budget. <b>${fmt(Math.abs(remaining))}</b> over, with ${daysRemaining} day${daysRemaining===1?'':'s'} left.`;
+      insightText = `You've used up this month's budget. <b>${fmt(Math.abs(remaining))}</b> over, with ${daysRemaining} day${daysRemaining===1?'':'s'} left. You've spent <b>${fmt(spentToday)}</b> today.`;
     } else {
       figure = fmt(suggestedDaily);
       const paceMsg = paceDiff >= 0
         ? `You're <b>${fmt(Math.abs(paceDiff))} under</b> pace for today.`
         : `You're <b>${fmt(Math.abs(paceDiff))} over</b> pace for today.`;
-      insightText = `Suggested max spend per day for the rest of the month, to stay on budget. ${paceMsg}`;
+      insightText = `Suggested max spend per day for the rest of the month, to stay on budget. ${paceMsg} You've spent <b>${fmt(spentToday)}</b> today.`;
     }
     html += `
       <div class="insight">
@@ -534,15 +597,30 @@ function render(){
     html += `<div class="empty-state" style="margin-bottom:24px;">Set a monthly budget above to see your remaining balance and daily spend suggestion.</div>`;
   }
 
+  if(budget!=null){
+    const catTotals=CATEGORIES.map(c=>({...c,total:monthTx.filter(t=>t.category===c.id).reduce((s,t)=>s+t.amount,0)}));
+    const maxCat=Math.max(1,...catTotals.map(c=>c.total));
+    const avgDaily=spent/Math.max(1,today);
+    html += `<div class="section-title">At a glance</div><div class="dashboard-grid">
+      <div class="stat-card"><div class="stat-label">Spent today</div><div class="stat-value">${fmt(spentToday)}</div></div>
+      <div class="stat-card"><div class="stat-label">Average per day</div><div class="stat-value">${fmt(avgDaily)}</div></div>
+      <div class="stat-card"><div class="stat-label">Recurring / cycle</div><div class="stat-value">${fmt(recurringTotal)}</div></div>
+      <div class="stat-card"><div class="stat-label">Transactions</div><div class="stat-value">${monthTx.length}</div></div></div>
+      <div class="section-title">Spending by category</div><div style="margin-bottom:24px;">${catTotals.map(c=>`<div class="category-row"><span class="category-name">${c.label}</span><div class="category-bar"><div class="category-fill" style="width:${Math.min(100,c.total/maxCat*100)}%;background:${c.color}"></div></div><span class="category-amount">${fmt(c.total)}</span></div>`).join('')}</div>
+      <div class="section-title">Daily spending</div><div style="margin-bottom:24px;">${Array.from({length:today},(_,i)=>{const day=new Date(bounds.start);day.setDate(day.getDate()+i);const total=monthTx.filter(t=>dateOnly(new Date(t.date)).getTime()===dateOnly(day).getTime()).reduce((s,t)=>s+t.amount,0);return `<div class="category-row"><span class="category-name">${shortDate(day)}</span><div class="category-bar"><div class="category-fill" style="width:${Math.min(100,total/Math.max(1,suggestedDaily)*100)}%;background:var(--ink)"></div></div><span class="category-amount">${fmt(total)}</span></div>`;}).join('')}</div>
+      <div class="section-title">Recurring expenses</div><div style="margin-bottom:24px;">${(state.recurring||[]).length?(state.recurring||[]).map(r=>`<div class="tx-row"><span class="tx-cat-dot" style="background:${catInfo(r.category).color}"></span><span class="tx-desc"><span class="tx-name">${escapeHtml(r.name)}</span></span><span class="tx-amt">${fmt(r.amount)}</span><button class="tx-del recurring-del" data-id="${r.id}" title="Remove">✕</button></div>`).join(''):'<div class="empty-state">No recurring expenses added.</div>'}<button class="backup-btn" id="addRecurringBtn" style="margin-top:10px;">+ Add recurring expense</button></div>`;
+  }
+
   // Quick add form
   html += `
     <div class="section-title">Log a transaction</div>
     <form class="add-form" id="addForm">
-      <div class="amt-field"><span>$</span><input type="number" name="amount" placeholder="0.00" step="0.01" min="0" required></div>
+      <div class="amt-field"><span>R</span><input type="number" name="amount" placeholder="0.00" step="0.01" min="0" required></div>
       <select name="category">
         ${CATEGORIES.map(c=>`<option value="${c.id}">${c.label}</option>`).join('')}
       </select>
       <input type="text" name="note" placeholder="Note (optional)" maxlength="40">
+      <input type="date" name="date" value="${new Date().toISOString().slice(0,10)}">
       <button type="submit">Add transaction</button>
     </form>`;
 
@@ -562,6 +640,7 @@ function render(){
           <span class="tx-date">${dateStr}</span>
           <span class="tx-desc"><span class="leader">${escapeHtml(name)} ${'.'.repeat(60)}</span></span>
           <span class="tx-amt">${fmt(t.amount)}</span>
+          <button class="tx-edit" data-id="${t.id}" title="Edit">edit</button>
           <button class="tx-del" data-id="${t.id}" title="Delete">✕</button>
         </div>`;
     }).join('');
@@ -575,7 +654,21 @@ function escapeHtml(s){
   return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+function editTransaction(id){
+  const t=state.transactions.find(x=>x.id===id); if(!t)return; const d=new Date(t.date);
+  const dateValue=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const b=document.createElement('div'); b.className='modal-backdrop'; b.innerHTML=`<div class="modal"><h3>Edit transaction</h3><label>Amount</label><input id="editAmount" type="number" min="0.01" step="0.01" value="${t.amount}"><label>Category</label><select id="editCategory">${CATEGORIES.map(c=>`<option value="${c.id}" ${c.id===t.category?'selected':''}>${c.label}</option>`).join('')}</select><label>Note</label><input id="editNote" type="text" maxlength="40" value="${escapeHtml(t.note||'')}"><label>Date</label><input id="editDate" type="date" value="${dateValue}"><div class="modal-actions"><button class="modal-cancel">Cancel</button><button class="modal-save">Save changes</button></div></div>`;
+  document.body.appendChild(b); b.querySelector('.modal-cancel').onclick=()=>b.remove();
+  b.querySelector('.modal-save').onclick=async()=>{const amount=parseFloat(document.getElementById('editAmount').value),date=document.getElementById('editDate').value;if(isNaN(amount)||amount<=0||!date)return;t.amount=amount;t.category=document.getElementById('editCategory').value;t.note=document.getElementById('editNote').value;t.date=new Date(date+'T12:00:00').toISOString();b.remove();await saveData();render();};
+}
+
 function attachHandlers(){
+  const exportBtn=document.getElementById('exportBtn'), importBtn=document.getElementById('importBtn'), importFile=document.getElementById('importFile');
+  if(exportBtn) exportBtn.onclick=downloadBackup;
+  if(importBtn&&importFile){importBtn.onclick=()=>importFile.click();importFile.onchange=()=>{importBackup(importFile.files[0]);importFile.value='';};}
+  const addRecurringBtn=document.getElementById('addRecurringBtn'); if(addRecurringBtn)addRecurringBtn.onclick=addRecurring;
+  document.querySelectorAll('.recurring-del').forEach(btn=>btn.onclick=()=>removeRecurring(btn.getAttribute('data-id')));
+  document.querySelectorAll('.tx-edit').forEach(btn=>btn.onclick=()=>editTransaction(btn.getAttribute('data-id')));
   const editBtn = document.getElementById('budgetEditBtn');
   if(editBtn) editBtn.onclick = ()=>{ editingBudget = true; render(); };
 
@@ -614,7 +707,7 @@ function attachHandlers(){
       amount: amount,
       category: fd.get('category'),
       note: fd.get('note') || '',
-      date: new Date().toISOString()
+      date: new Date((fd.get('date') || new Date().toISOString().slice(0,10)) + 'T12:00:00').toISOString()
     });
     await saveData();
     render();
